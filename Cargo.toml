@@ -16,6 +16,7 @@ all-features = true
 serde_core = { version = "1.0.220", optional = true, default-features = false }
 borsh = { version = "1.4.0", optional = true, default-features = false }
 arbitrary = { version = "1.3", optional = true }
+bincode = "2.0"
 
 [dev-dependencies]
 proptest = "1.5"

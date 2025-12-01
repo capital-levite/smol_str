@@ -32,6 +32,24 @@ use core::{
 /// `WS`: A string of 32 newlines followed by 128 spaces.
 pub struct SmolStr(Repr);
 
+impl bincode::Encode for SmolStr {
+    fn encode<E: bincode::enc::Encoder>(
+        &self,
+        encoder: &mut E,
+    ) -> Result<(), bincode::error::EncodeError> {
+        self.as_str().encode(encoder)
+    }
+}
+
+impl<C> bincode::Decode<C> for SmolStr {
+    fn decode<D: bincode::de::Decoder>(
+        decoder: &mut D,
+    ) -> Result<Self, bincode::error::DecodeError> {
+        let s: String = bincode::Decode::decode(decoder)?;
+        Ok(SmolStr::new(s))
+    }
+}
+
 impl SmolStr {
     /// Constructs an inline variant of `SmolStr`.
     ///
