@@ -160,17 +160,17 @@ impl SmolStr {
         // For small inputs, we can optimize by directly constructing inline storage
         // This follows the same pattern as from_utf8_lossy for valid UTF-8
         if bytes.len() <= INLINE_CAP {
+            if bytes.is_empty() {
+                return Ok(SmolStr::default());
+            }
+
             // Use utf8_chunks for SIMD-accelerated validation (same as from_utf8_lossy)
             let mut chunks = bytes.utf8_chunks();
+            // SAFETY: bytes is non-empty, so there's always at least one chunk
+            let first_chunk = chunks.next().unwrap();
 
-            let first_chunk = if let Some(chunk) = chunks.next() {
-                chunk
-            } else {
-                // Empty input is valid UTF-8
-                return Ok(SmolStr::default());
-            };
-
-            // Check if the entire input is valid UTF-8
+            // For inputs <= INLINE_CAP, utf8_chunks produces at most one chunk for valid UTF-8
+            // A second chunk would only exist if there were invalid bytes followed by more content
             if first_chunk.invalid().is_empty() && chunks.next().is_none() {
                 // Valid UTF-8 that fits inline - construct directly
                 let mut buf = [0; INLINE_CAP];
@@ -182,11 +182,10 @@ impl SmolStr {
                 }));
             }
 
-            // Invalid UTF-8 - return error with position info
-            // Fall through to core::str::from_utf8 to get proper Utf8Error
+            // Invalid UTF-8 detected - fall through to get proper Utf8Error with position info
         }
 
-        // For larger inputs or to get proper error info, use standard library
+        // For larger inputs or invalid small inputs, use standard library
         let s = core::str::from_utf8(bytes)?;
         Ok(SmolStr::new(s))
     }
