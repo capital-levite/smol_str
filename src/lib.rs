@@ -50,6 +50,17 @@ impl<C> bincode::Decode<C> for SmolStr {
     }
 }
 
+// Manually implement bincode::BorrowDecode for SmolStr to satisfy derive macros
+// that might require it, even if it involves a copy due to SmolStr's internal representation.
+impl<'de, C> bincode::BorrowDecode<'de, C> for SmolStr {
+    fn borrow_decode<D: bincode::de::BorrowDecoder<'de, Context = C>>(
+        decoder: &mut D,
+    ) -> Result<Self, bincode::error::DecodeError> {
+        let borrowed_str: &'de str = bincode::BorrowDecode::borrow_decode(decoder)?;
+        Ok(SmolStr::new(borrowed_str))
+    }
+}
+
 impl SmolStr {
     /// Constructs an inline variant of `SmolStr`.
     ///
