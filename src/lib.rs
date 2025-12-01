@@ -9,7 +9,7 @@ use core::{
     cmp::{self, Ordering},
     convert::Infallible,
     fmt, hash, iter, mem, ops,
-    str::FromStr,
+    str::{FromStr, Utf8Error},
 };
 
 /// A `SmolStr` is a string type that has the following properties:
@@ -100,7 +100,101 @@ impl SmolStr {
         matches!(self.0, Repr::Heap(..))
     }
 
-    /// the Unicode replacement character (U+FFFD).
+    /// Converts a slice of bytes to a `SmolStr`.
+    ///
+    /// A string slice ([`&str`]) is made of bytes ([`u8`]), and a byte slice
+    /// ([`&[u8]`][byteslice]) is made of bytes, so this function converts between
+    /// the two. Not all byte slices are valid string slices, however: [`&str`] requires
+    /// that it is valid UTF-8. `from_utf8()` checks to ensure that the bytes are valid
+    /// UTF-8, and then does the conversion.
+    ///
+    /// [byteslice]: slice
+    ///
+    /// If you are sure that the byte slice is valid UTF-8, and you don't want to
+    /// incur the overhead of the validity check, there is an unsafe version of
+    /// this function, [`from_utf8_unchecked`][SmolStr::from_utf8_unchecked],
+    /// which has the same behavior but skips the check.
+    ///
+    /// If you need a `String` instead of a `&str`, consider
+    /// [`String::from_utf8`][string].
+    ///
+    /// [string]: String::from_utf8
+    ///
+    /// Because you can stack-allocate a `[u8; N]`, and you can take a
+    /// [`&[u8]`][byteslice] of it, this function is one way to have a
+    /// stack-allocated string.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Err`] if the slice is not UTF-8 with a description as to why the
+    /// provided slice is not UTF-8.
+    ///
+    /// # Examples
+    ///
+    /// Basic usage:
+    ///
+    /// ```
+    /// use smol_str::SmolStr;
+    ///
+    /// // some bytes, in a stack-allocated array
+    /// let sparkle_heart = [240, 159, 146, 150];
+    ///
+    /// // We know these bytes are valid, so just use `unwrap()`.
+    /// let sparkle_heart = SmolStr::from_utf8(&sparkle_heart).unwrap();
+    ///
+    /// assert_eq!("💖", sparkle_heart);
+    /// ```
+    ///
+    /// Incorrect bytes:
+    ///
+    /// ```
+    /// use smol_str::SmolStr;
+    ///
+    /// // some invalid bytes, in a stack-allocated array
+    /// let sparkle_heart = [0, 159, 146, 150];
+    ///
+    /// assert!(SmolStr::from_utf8(&sparkle_heart).is_err());
+    /// ```
+    #[inline]
+    pub fn from_utf8(bytes: &[u8]) -> Result<SmolStr, Utf8Error> {
+        // Validate UTF-8 using the standard library's SIMD-optimized implementation
+        let s = core::str::from_utf8(bytes)?;
+        Ok(SmolStr::new(s))
+    }
+
+    /// Converts a slice of bytes to a `SmolStr` without checking
+    /// that the bytes are valid UTF-8.
+    ///
+    /// See the safe version, [`from_utf8`][SmolStr::from_utf8], for more details.
+    ///
+    /// # Safety
+    ///
+    /// The bytes passed in must be valid UTF-8.
+    ///
+    /// # Examples
+    ///
+    /// Basic usage:
+    ///
+    /// ```
+    /// use smol_str::SmolStr;
+    ///
+    /// // some bytes, in a stack-allocated array
+    /// let sparkle_heart = [240, 159, 146, 150];
+    ///
+    /// let sparkle_heart = unsafe {
+    ///     SmolStr::from_utf8_unchecked(&sparkle_heart)
+    /// };
+    ///
+    /// assert_eq!("💖", sparkle_heart);
+    /// ```
+    #[inline]
+    pub unsafe fn from_utf8_unchecked(bytes: &[u8]) -> SmolStr {
+        // SAFETY: The caller guarantees that the bytes are valid UTF-8.
+        let s = unsafe { core::str::from_utf8_unchecked(bytes) };
+        SmolStr::new(s)
+    }
+
+    /// Converts a slice of bytes to a `SmolStr`, replacing invalid UTF-8 sequences with
 
     ///
 

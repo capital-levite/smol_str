@@ -512,3 +512,92 @@ mod test_from_utf8_lossy {
         assert!(!smol_str.is_heap_allocated());
     }
 }
+
+#[cfg(test)]
+mod test_from_utf8 {
+    use super::*;
+
+    #[test]
+    fn test_valid_utf8_inline() {
+        let bytes = b"Hello, world!";
+        let smol_str = SmolStr::from_utf8(bytes).unwrap();
+        assert_eq!(smol_str, "Hello, world!");
+        assert!(!smol_str.is_heap_allocated());
+    }
+
+    #[test]
+    fn test_valid_utf8_heap() {
+        let long_string = "a".repeat(100);
+        let bytes = long_string.as_bytes();
+        let smol_str = SmolStr::from_utf8(bytes).unwrap();
+        assert_eq!(smol_str, long_string);
+        assert!(smol_str.is_heap_allocated());
+    }
+
+    #[test]
+    fn test_invalid_utf8() {
+        let bytes = &[0xFF, 0xFE, 0xFD]; // Invalid UTF-8
+        let result = SmolStr::from_utf8(bytes);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_empty_bytes() {
+        let bytes = b"";
+        let smol_str = SmolStr::from_utf8(bytes).unwrap();
+        assert_eq!(smol_str, "");
+        assert!(!smol_str.is_heap_allocated());
+    }
+
+    #[test]
+    fn test_valid_unicode() {
+        // sparkle heart emoji: U+1F496 encoded as UTF-8
+        let sparkle_heart = [240, 159, 146, 150];
+        let smol_str = SmolStr::from_utf8(&sparkle_heart).unwrap();
+        assert_eq!(smol_str, "💖");
+        assert!(!smol_str.is_heap_allocated());
+    }
+
+    #[test]
+    fn test_incomplete_utf8_sequence() {
+        // An incomplete UTF-8 sequence
+        let bytes = &[0xE2, 0x82]; // Missing the third byte for a 3-byte sequence
+        let result = SmolStr::from_utf8(bytes);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_max_inline_length() {
+        // Test that a 23-byte valid UTF-8 string is stored inline
+        let bytes = b"abcdefghijklmnopqrstuvw"; // exactly 23 bytes
+        let smol_str = SmolStr::from_utf8(bytes).unwrap();
+        assert_eq!(smol_str, "abcdefghijklmnopqrstuvw");
+        assert!(!smol_str.is_heap_allocated());
+    }
+
+    #[test]
+    fn test_just_over_inline_length() {
+        // Test that a 24-byte valid UTF-8 string is heap-allocated
+        let bytes = b"abcdefghijklmnopqrstuvwx"; // 24 bytes
+        let smol_str = SmolStr::from_utf8(bytes).unwrap();
+        assert_eq!(smol_str, "abcdefghijklmnopqrstuvwx");
+        assert!(smol_str.is_heap_allocated());
+    }
+
+    #[test]
+    fn test_unchecked_valid_utf8() {
+        let bytes = b"Hello, world!";
+        let smol_str = unsafe { SmolStr::from_utf8_unchecked(bytes) };
+        assert_eq!(smol_str, "Hello, world!");
+        assert!(!smol_str.is_heap_allocated());
+    }
+
+    #[test]
+    fn test_unchecked_valid_unicode() {
+        // sparkle heart emoji: U+1F496 encoded as UTF-8
+        let sparkle_heart = [240, 159, 146, 150];
+        let smol_str = unsafe { SmolStr::from_utf8_unchecked(&sparkle_heart) };
+        assert_eq!(smol_str, "💖");
+        assert!(!smol_str.is_heap_allocated());
+    }
+}
