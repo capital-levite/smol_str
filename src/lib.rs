@@ -157,7 +157,36 @@ impl SmolStr {
     /// ```
     #[inline]
     pub fn from_utf8(bytes: &[u8]) -> Result<SmolStr, Utf8Error> {
-        // Validate UTF-8 using the standard library's SIMD-optimized implementation
+        // For small inputs, we can optimize by directly constructing inline storage
+        // This follows the same pattern as from_utf8_lossy for valid UTF-8
+        if bytes.len() <= INLINE_CAP {
+            // Use utf8_chunks for SIMD-accelerated validation (same as from_utf8_lossy)
+            let mut chunks = bytes.utf8_chunks();
+
+            let first_chunk = if let Some(chunk) = chunks.next() {
+                chunk
+            } else {
+                // Empty input is valid UTF-8
+                return Ok(SmolStr::default());
+            };
+
+            // Check if the entire input is valid UTF-8
+            if first_chunk.invalid().is_empty() && chunks.next().is_none() {
+                // Valid UTF-8 that fits inline - construct directly
+                let mut buf = [0; INLINE_CAP];
+                buf[..bytes.len()].copy_from_slice(bytes);
+                return Ok(SmolStr(Repr::Inline {
+                    // SAFETY: bytes.len() <= INLINE_CAP as checked above
+                    len: unsafe { InlineSize::transmute_from_u8(bytes.len() as u8) },
+                    buf,
+                }));
+            }
+
+            // Invalid UTF-8 - return error with position info
+            // Fall through to core::str::from_utf8 to get proper Utf8Error
+        }
+
+        // For larger inputs or to get proper error info, use standard library
         let s = core::str::from_utf8(bytes)?;
         Ok(SmolStr::new(s))
     }
@@ -189,6 +218,17 @@ impl SmolStr {
     /// ```
     #[inline]
     pub unsafe fn from_utf8_unchecked(bytes: &[u8]) -> SmolStr {
+        // For small inputs, directly construct inline storage (same optimization as from_utf8)
+        if bytes.len() <= INLINE_CAP {
+            let mut buf = [0; INLINE_CAP];
+            buf[..bytes.len()].copy_from_slice(bytes);
+            return SmolStr(Repr::Inline {
+                // SAFETY: bytes.len() <= INLINE_CAP as checked above
+                len: unsafe { InlineSize::transmute_from_u8(bytes.len() as u8) },
+                buf,
+            });
+        }
+
         // SAFETY: The caller guarantees that the bytes are valid UTF-8.
         let s = unsafe { core::str::from_utf8_unchecked(bytes) };
         SmolStr::new(s)
